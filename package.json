@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "run n — where n is anything. Zero-config runner for JS, TS, JSX, TSX, and HTML files. One command, hot reload, endless possibilities.",
   "bin": {
-    "runn": "./bin/runn.js"
+    "runn": "bin/runn.js"
   },
   "type": "module",
   "files": [
@@ -48,7 +48,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/meetkishan/runn.git"
+    "url": "git+https://github.com/meetkishan/runn.git"
   },
   "bugs": {
     "url": "https://github.com/meetkishan/runn/issues"
