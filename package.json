@@ -1,0 +1,57 @@
+{
+  "name": "getrun",
+  "version": "1.0.0",
+  "description": "run n — where n is anything. Zero-config runner for JS, TS, JSX, TSX, and HTML files. One command, hot reload, endless possibilities.",
+  "bin": {
+    "runn": "./bin/runn.js"
+  },
+  "type": "module",
+  "files": [
+    "bin/",
+    "src/"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tsx": "^4.19.2",
+    "vite": "^6.0.0"
+  },
+  "keywords": [
+    "run",
+    "runner",
+    "tsx",
+    "jsx",
+    "typescript",
+    "javascript",
+    "html",
+    "react",
+    "vite",
+    "bun",
+    "zero-config",
+    "cli",
+    "dev-server",
+    "hot-reload",
+    "hmr",
+    "nextjs",
+    "single-file",
+    "quick-start",
+    "prototyping",
+    "npx"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/meetkishan/runn.git"
+  },
+  "bugs": {
+    "url": "https://github.com/meetkishan/runn/issues"
+  },
+  "homepage": "https://github.com/meetkishan/runn#readme"
+}
