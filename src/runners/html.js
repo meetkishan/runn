@@ -28,6 +28,7 @@ import { createServer } from 'http'
 import { readFile, watch } from 'fs'
 import { extname, dirname, join } from 'path'
 import { findFreePort, openBrowser } from '../utils.js'
+import { OVERLAY_CLIENT_CODE } from '../overlay.js'
 
 // MIME type map — covers the assets most likely to sit next to an HTML file.
 // Falls back to application/octet-stream for anything not listed here.
@@ -54,10 +55,12 @@ const MIME = {
 }
 
 // Injected before </body> in every HTML response.
-// Uses an IIFE to avoid polluting the global scope of the user's page.
+// Loads the error overlay first, then wires up the SSE hot-reload connection.
+// Both scripts use IIFEs to avoid polluting the global scope of the user's page.
 // On error (server restart / port change) we wait 800ms before reloading —
 // enough time for the new server to be ready to accept connections.
 const HMR_SNIPPET = `
+<script src="/__runn_overlay.js"></script>
 <script>
 (function () {
   var es = new EventSource('/__runn_hmr');
@@ -66,7 +69,7 @@ const HMR_SNIPPET = `
     es.close();
     setTimeout(function () { location.reload(); }, 800);
   };
-  console.log('[runn] hot-reload active');
+  console.log('[runn] hot-reload + error overlay active');
 })();
 </script>
 `
@@ -107,6 +110,19 @@ export async function runHtml(absPath) {
       res.write(': connected\n\n')
       sseClients.add(res)
       req.on('close', () => sseClients.delete(res))
+      return
+    }
+
+    // ── Error overlay script ─────────────────────────────────────────────────
+    // Served as a plain JS file so the browser can cache it and it doesn't
+    // inflate the HTML response. Sets up window.__runnShowError,
+    // window.__runnDismissError, window.onerror, and unhandledrejection.
+    if (req.url === '/__runn_overlay.js') {
+      res.writeHead(200, {
+        'Content-Type': 'application/javascript',
+        'Cache-Control': 'no-cache',
+      })
+      res.end(OVERLAY_CLIENT_CODE, 'utf8')
       return
     }
 

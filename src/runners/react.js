@@ -35,6 +35,7 @@ import { existsSync } from 'fs'
 import { tmpdir } from 'os'
 import { createHash } from 'crypto'
 import { getPackageRoot, findProjectRoot } from '../utils.js'
+import { createViteOverlayPlugin } from '../overlay.js'
 
 /**
  * @param {string} absPath - absolute path to the component file
@@ -102,16 +103,53 @@ export async function runReact(absPath, content) {
   )
 
   // Entry point that mounts the user's component — generated fresh each run
-  // so changes to the import line (e.g. named → default export) take effect
+  // so changes to the import line (e.g. named → default export) take effect.
+  //
+  // The overlay import wires up Vite build-error events and the global
+  // window.onerror handler. The ErrorBoundary catches component render errors
+  // that React re-throws before they can reach window.onerror.
   await writeFile(
     join(tempDir, 'main.jsx'),
     `${importLine}
 import { createRoot } from 'react-dom/client'
-import { StrictMode } from 'react'
+import { StrictMode, Component } from 'react'
+import 'virtual:runn-overlay'
+
+// Catches errors thrown during render / in lifecycle methods.
+// Errors from event handlers, async code, and setTimeout are caught
+// separately by the window.onerror listener installed by the overlay.
+class ErrorBoundary extends Component {
+  constructor(props) {
+    super(props)
+    this.state = { hasError: false }
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true }
+  }
+
+  componentDidCatch(error, info) {
+    window.__runnShowError({
+      type:           error.name || 'React Error',
+      message:        error.message,
+      stack:          error.stack,
+      componentStack: info && info.componentStack,
+    })
+  }
+
+  render() {
+    // When there's an error the overlay is showing — render nothing beneath it.
+    // When the error is fixed, HMR replaces this module and the boundary resets.
+    if (this.state.hasError) return null
+    return this.props.children
+  }
+}
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <App />
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
   </StrictMode>
 )
 `
@@ -129,11 +167,22 @@ createRoot(document.getElementById('root')).render(
   const server = await createServer({
     configFile: false,  // we own the config entirely — don't look for vite.config.*
     root: tempDir,
-    plugins: [react()],
+    plugins: [
+      react(),
+      // Serves `virtual:runn-overlay` and wires up import.meta.hot error events.
+      // Must come after react() so JSX is already transformed when the virtual
+      // module's HMR listeners fire.
+      createViteOverlayPlugin(),
+    ],
 
     server: {
       open: true,   // open the browser automatically on first start
       host: 'localhost',
+      hmr: {
+        // Disable Vite's built-in error overlay — runn's overlay replaces it
+        // with a richer, on-brand experience that also catches React render errors.
+        overlay: false,
+      },
       fs: {
         strict: false,
         // Allow Vite to serve files from all relevant directories:
