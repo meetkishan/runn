@@ -2,12 +2,15 @@
  * detect.js — file type router
  *
  * Inspects the file path and its content to decide which runner should handle
- * it. The priority order matters:
- *   1. HTML  — extension is unambiguous, check first
- *   2. Next.js — must come before the .tsx/.jsx check because a Next.js page
- *      is also a React file, but it needs `next dev`, not a bare Vite server
- *   3. React — .tsx/.jsx extensions, or .ts/.js files that look like components
- *   4. Script — everything else (plain Node/Bun scripts, utilities, etc.)
+ * it. The priority order matters — it is intentional:
+ *
+ *   1. HTML    — extension is unambiguous, check first
+ *   2. Nuxt    — must come before .vue, because a .vue file inside a Nuxt
+ *                project needs `nuxt dev`, not a standalone Vite server
+ *   3. Next.js — must come before .tsx/.jsx for the same reason
+ *   4. Vue     — .vue extension, or .ts/.js files that import from 'vue'
+ *   5. React   — .tsx/.jsx extensions, or .ts/.js files that look like components
+ *   6. Script  — everything else (plain Node/Bun scripts, utilities, etc.)
  */
 
 import { existsSync } from 'fs'
@@ -21,27 +24,42 @@ const NEXT_CONFIGS = [
   'next.config.cjs',
 ]
 
+// All filenames that signal a Nuxt project root
+const NUXT_CONFIGS = [
+  'nuxt.config.js',
+  'nuxt.config.ts',
+  'nuxt.config.mjs',
+  'nuxt.config.cjs',
+]
+
 /**
- * Returns one of: 'html' | 'nextjs' | 'react' | 'script'
+ * Returns one of: 'html' | 'nuxt' | 'nextjs' | 'vue' | 'react' | 'script'
  *
  * @param {string} absPath  - absolute path to the file
- * @param {string} content  - file contents (used for React heuristics on .ts/.js)
+ * @param {string} content  - file contents (used for Vue/React heuristics on .ts/.js)
  */
 export function detectFileType(absPath, content = '') {
   const ext = extname(absPath).toLowerCase()
 
   if (ext === '.html' || ext === '.htm') return 'html'
 
-  // Walk up the tree before checking extensions — a Next.js .tsx page should
-  // never be opened with the standalone Vite React runner
+  // Framework project checks must run before extension checks — a .vue file
+  // inside a Nuxt project and a .tsx inside a Next.js project both need the
+  // framework's own dev server, not runn's standalone Vite scaffold
+  if (isNuxtProject(absPath))   return 'nuxt'
   if (isNextjsProject(absPath)) return 'nextjs'
 
-  // JSX/TSX extensions are an unambiguous signal — no content scan needed
+  // .vue is an unambiguous signal — no content scan needed
+  if (ext === '.vue') return 'vue'
+
+  // .tsx/.jsx are unambiguous React signals — no content scan needed
   if (ext === '.tsx' || ext === '.jsx') return 'react'
 
-  // For plain .ts/.js files we need a content heuristic because these
-  // extensions are used for both React components and plain scripts
+  // For plain .ts/.js we inspect content because these extensions are shared
+  // between Vue components, React components, and plain scripts.
+  // Vue check comes first — `from 'vue'` is more specific than JSX heuristics.
   if (ext === '.ts' || ext === '.js' || ext === '.mjs' || ext === '.mts') {
+    if (looksLikeVueComponent(content))   return 'vue'
     if (looksLikeReactComponent(content)) return 'react'
     return 'script'
   }
@@ -50,10 +68,32 @@ export function detectFileType(absPath, content = '') {
 }
 
 /**
- * Walks up the directory tree from the given file looking for a Next.js config.
- * We walk up (rather than just checking the file's directory) so that a file
- * deep inside a project — e.g. app/dashboard/components/Chart.tsx — is still
- * correctly identified as part of a Next.js project.
+ * Walks up the directory tree looking for a Nuxt config file.
+ * Walking up lets us detect Nuxt from any file deep inside the project —
+ * e.g. components/ui/Button.vue — not just files at the project root.
+ *
+ * @param {string} absPath
+ * @returns {boolean}
+ */
+function isNuxtProject(absPath) {
+  let dir = dirname(absPath)
+
+  while (true) {
+    for (const cfg of NUXT_CONFIGS) {
+      if (existsSync(join(dir, cfg))) return true
+    }
+
+    const parent = dirname(dir)
+    if (parent === dir) break // reached filesystem root
+    dir = parent
+  }
+
+  return false
+}
+
+/**
+ * Walks up the directory tree looking for a Next.js config file.
+ * Same walk-up logic as isNuxtProject — handles deeply nested files.
  *
  * @param {string} absPath
  * @returns {boolean}
@@ -67,10 +107,7 @@ function isNextjsProject(absPath) {
     }
 
     const parent = dirname(dir)
-
-    // dirname('/') === '/' — we've reached the filesystem root with no match
     if (parent === dir) break
-
     dir = parent
   }
 
@@ -78,10 +115,25 @@ function isNextjsProject(absPath) {
 }
 
 /**
- * Cheap heuristic to tell if a .ts/.js file is a React component.
- * We intentionally keep this fast and slightly loose — a false positive sends
- * a script to the React runner, which will fail gracefully with a Vite error.
- * A false negative sends a component to the script runner, which is worse UX.
+ * Heuristic: does a .ts/.js file look like a Vue component?
+ * Checks for ESM/CJS imports from 'vue' and Vue's defineComponent API.
+ * Vue SFCs (.vue files) are detected by extension and never reach this check.
+ *
+ * @param {string} content
+ * @returns {boolean}
+ */
+function looksLikeVueComponent(content) {
+  return (
+    /from\s+['"]vue['"]/.test(content) ||
+    /require\(\s*['"]vue['"]\s*\)/.test(content) ||
+    /defineComponent\s*\(/.test(content) ||
+    /createApp\s*\(/.test(content)
+  )
+}
+
+/**
+ * Heuristic: does a .ts/.js file look like a React component?
+ * Runs only after the Vue check — `from 'react'` is checked after `from 'vue'`.
  *
  * Three signals we look for:
  *   - ESM import from 'react'

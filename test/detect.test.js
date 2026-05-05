@@ -4,9 +4,9 @@
  * Uses Node's built-in test runner (node:test) — no extra dependencies needed.
  * Run with:  npm test
  *
- * We can't test Next.js detection here because isNextjsProject() walks the
- * real filesystem looking for next.config.* files. Those cases are covered
- * manually or in a future integration test suite.
+ * Note: Nuxt and Next.js detection walk the real filesystem looking for
+ * config files. Those cases are covered manually via fixture files or a
+ * future integration test suite that sets up a real project structure.
  */
 
 import { test, describe } from 'node:test'
@@ -29,11 +29,80 @@ describe('HTML files', () => {
   })
 
   test('ignores content — extension alone decides', () => {
-    // Even if the file contains React-like content, .html wins
+    // Even if the file contains framework imports, .html always wins
     assert.equal(
       detectFileType('/project/index.html', 'import React from "react"'),
       'html'
     )
+  })
+})
+
+// ── Vue (by extension) ────────────────────────────────────────────────────────
+
+describe('.vue files', () => {
+  test('detects .vue as vue', () => {
+    assert.equal(detectFileType('/project/Button.vue', ''), 'vue')
+  })
+
+  test('is case-insensitive for extension', () => {
+    assert.equal(detectFileType('/project/App.VUE', ''), 'vue')
+  })
+
+  test('does not need content — extension is enough', () => {
+    assert.equal(detectFileType('/project/Empty.vue', ''), 'vue')
+  })
+
+  test('ignores React content inside a .vue file — extension wins', () => {
+    // A .vue file that also imports react (unusual but possible) stays vue
+    assert.equal(
+      detectFileType('/project/Hybrid.vue', "import React from 'react'"),
+      'vue'
+    )
+  })
+})
+
+// ── Vue (by content heuristic) ────────────────────────────────────────────────
+
+describe('.ts / .js files with Vue content', () => {
+  test('detects ESM import from vue', () => {
+    assert.equal(
+      detectFileType('/project/composable.ts', "import { ref } from 'vue'"),
+      'vue'
+    )
+  })
+
+  test('detects named import from vue', () => {
+    assert.equal(
+      detectFileType('/project/store.js', "import { reactive, computed } from 'vue'"),
+      'vue'
+    )
+  })
+
+  test('detects CJS require("vue")', () => {
+    assert.equal(
+      detectFileType('/project/plugin.js', "const { createApp } = require('vue')"),
+      'vue'
+    )
+  })
+
+  test('detects defineComponent call', () => {
+    assert.equal(
+      detectFileType('/project/Widget.ts', 'export default defineComponent({ setup() {} })'),
+      'vue'
+    )
+  })
+
+  test('detects createApp call', () => {
+    assert.equal(
+      detectFileType('/project/main.js', "import { createApp } from 'vue'\ncreateApp(App).mount('#app')"),
+      'vue'
+    )
+  })
+
+  test('Vue check runs before React — from vue wins over JSX heuristic', () => {
+    // A file with both Vue and React-like content should be treated as Vue
+    const mixed = "import { ref } from 'vue'\nconst el = <MyComponent />"
+    assert.equal(detectFileType('/project/mixed.ts', mixed), 'vue')
   })
 })
 
@@ -96,7 +165,7 @@ describe('.ts / .js files with React content', () => {
   })
 
   test('does NOT flag lowercase JSX tags — not a React signal', () => {
-    // <div>, <span>, etc. could be in any template string — not a safe signal
+    // <div>, <span>, etc. appear in template strings too — not safe to flag
     assert.equal(
       detectFileType('/project/template.js', 'const html = `<div>hello</div>`'),
       'script'
@@ -107,14 +176,14 @@ describe('.ts / .js files with React content', () => {
 // ── Script ────────────────────────────────────────────────────────────────────
 
 describe('plain script files', () => {
-  test('detects .ts with no React content as script', () => {
+  test('detects .ts with no framework content as script', () => {
     assert.equal(
       detectFileType('/project/utils.ts', 'export function add(a, b) { return a + b }'),
       'script'
     )
   })
 
-  test('detects .js with no React content as script', () => {
+  test('detects .js with no framework content as script', () => {
     assert.equal(
       detectFileType('/project/server.js', "import express from 'express'"),
       'script'
@@ -125,7 +194,7 @@ describe('plain script files', () => {
     assert.equal(detectFileType('/project/helper.mjs', ''), 'script')
   })
 
-  test('detects .mts as script when no React content', () => {
+  test('detects .mts as script when no framework content', () => {
     assert.equal(detectFileType('/project/types.mts', 'export type ID = string'), 'script')
   })
 
@@ -146,10 +215,11 @@ describe('edge cases', () => {
   })
 
   test('handles deeply nested paths', () => {
-    assert.equal(
-      detectFileType('/a/b/c/d/e/f/Component.tsx', ''),
-      'react'
-    )
+    assert.equal(detectFileType('/a/b/c/d/e/f/Component.tsx', ''), 'react')
+  })
+
+  test('handles deeply nested .vue paths', () => {
+    assert.equal(detectFileType('/a/b/c/d/e/f/Button.vue', ''), 'vue')
   })
 
   test('handles no extension', () => {
@@ -157,7 +227,7 @@ describe('edge cases', () => {
   })
 
   test('content defaults to empty string when omitted', () => {
-    // Should not throw when called with one argument
     assert.doesNotThrow(() => detectFileType('/project/App.tsx'))
+    assert.doesNotThrow(() => detectFileType('/project/Button.vue'))
   })
 })

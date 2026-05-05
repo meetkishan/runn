@@ -15,7 +15,9 @@ import { resolve } from 'path'
 import { detectFileType } from './detect.js'
 import { runScript } from './runners/script.js'
 import { runReact } from './runners/react.js'
+import { runVue } from './runners/vue.js'
 import { runNextjs } from './runners/nextjs.js'
+import { runNuxt } from './runners/nuxt.js'
 import { runHtml } from './runners/html.js'
 
 const args = process.argv.slice(2)
@@ -29,15 +31,19 @@ if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
     runn <file>
 
   Supported:
-    .js  .ts        plain script  →  run with bun (or node --watch)
-    .jsx .tsx       React component  →  Vite dev server + hot reload
-    .html .htm      static file  →  dev server + hot reload
+    .js  .ts        plain script   →  run with bun (or node --watch)
+    .jsx .tsx       React component →  Vite dev server + hot reload
+    .vue            Vue component   →  Vite dev server + hot reload
+    .html .htm      static file    →  dev server + hot reload
     Next.js file    auto-detected  →  next dev
+    Nuxt file       auto-detected  →  nuxt dev
 
   Examples:
     runn server.ts
     runn App.tsx
+    runn Button.vue
     runn pages/index.tsx     (Next.js)
+    runn pages/index.vue     (Nuxt)
     runn index.html
   `)
   process.exit(0)
@@ -45,7 +51,7 @@ if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
 
 const filePath = args[0]
 
-// resolve() turns a relative path like './App.tsx' into an absolute one.
+// resolve() turns a relative path like './App.vue' into an absolute one.
 // All runners expect an absolute path so they can safely construct temp dirs,
 // symlinks, and Vite configs without ambiguity.
 const absPath = resolve(filePath)
@@ -72,8 +78,14 @@ switch (type) {
   case 'react':
     await runReact(absPath, content)
     break
+  case 'vue':
+    await runVue(absPath)
+    break
   case 'nextjs':
     await runNextjs(absPath)
+    break
+  case 'nuxt':
+    await runNuxt(absPath)
     break
   default:
     await runScript(absPath)
