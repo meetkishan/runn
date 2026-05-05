@@ -1,7 +1,7 @@
 {
   "name": "getrun",
   "version": "1.0.0",
-  "description": "run n — where n is anything. Zero-config runner for JS, TS, JSX, TSX, and HTML files. One command, hot reload, endless possibilities.",
+  "description": "run n — where n is anything. Zero-config runner for JS, TS, JSX, TSX, Vue, and HTML files. One command, hot reload, endless possibilities.",
   "bin": {
     "runn": "bin/runn.js"
   },
@@ -14,11 +14,13 @@
     "node": ">=18.0.0"
   },
   "dependencies": {
-    "@vitejs/plugin-react": "^4.3.4",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "tsx": "^4.19.2",
-    "vite": "^6.0.0"
+    "@vitejs/plugin-react": "4.7.0",
+    "@vitejs/plugin-vue": "6.0.6",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "tsx": "4.21.0",
+    "vite": "6.4.2",
+    "vue": "3.5.33"
   },
   "keywords": [
     "run",
@@ -40,7 +42,12 @@
     "single-file",
     "quick-start",
     "prototyping",
-    "npx"
+    "npx",
+    "vue",
+    "vuejs",
+    "nuxt",
+    "nuxtjs",
+    "sfc"
   ],
   "scripts": {
     "test": "node --test test/*.test.js"
