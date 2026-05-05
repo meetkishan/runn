@@ -38,10 +38,11 @@ import { getPackageRoot, findProjectRoot } from '../utils.js'
 import { createViteOverlayPlugin } from '../overlay.js'
 
 /**
- * @param {string} absPath - absolute path to the component file
- * @param {string} content - file contents (used to detect export style)
+ * @param {string} absPath  - absolute path to the component file
+ * @param {string} content  - file contents (used to detect export style)
+ * @param {{ port?: number|null, host?: boolean }} [opts]
  */
-export async function runReact(absPath, content) {
+export async function runReact(absPath, content, opts = {}) {
   const RUNN_ROOT = getPackageRoot()
   const userFileDir = dirname(absPath)
   const userProjectRoot = findProjectRoot(absPath)
@@ -177,7 +178,12 @@ createRoot(document.getElementById('root')).render(
 
     server: {
       open: true,   // open the browser automatically on first start
-      host: 'localhost',
+      // --host binds to 0.0.0.0 so phones/tablets on the same network can connect.
+      // Without --host we bind to localhost only (safer default for dev machines).
+      host: opts.host ? '0.0.0.0' : 'localhost',
+      // --port sets the preferred port; strictPort makes Vite fail fast if it's
+      // already taken instead of silently moving to the next one.
+      ...(opts.port != null && { port: opts.port, strictPort: true }),
       hmr: {
         // Disable Vite's built-in error overlay — runn's overlay replaces it
         // with a richer, on-brand experience that also catches React render errors.

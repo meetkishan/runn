@@ -27,7 +27,7 @@
 import { createServer } from 'http'
 import { readFile, watch } from 'fs'
 import { extname, dirname, join } from 'path'
-import { findFreePort, openBrowser } from '../utils.js'
+import { findFreePort, openBrowser, getLocalIP } from '../utils.js'
 import { OVERLAY_CLIENT_CODE } from '../overlay.js'
 
 // MIME type map — covers the assets most likely to sit next to an HTML file.
@@ -76,10 +76,13 @@ const HMR_SNIPPET = `
 
 /**
  * @param {string} absPath - absolute path to the .html / .htm file to serve
+ * @param {{ port?: number|null, host?: boolean }} [opts]
  */
-export async function runHtml(absPath) {
+export async function runHtml(absPath, opts = {}) {
   const dir = dirname(absPath)
-  const port = await findFreePort(3000)
+  // Start scanning from the requested port (default 3000); auto-increment if busy
+  const port = await findFreePort(opts.port ?? 3000)
+  const listenHost = opts.host ? '0.0.0.0' : '127.0.0.1'
 
   // Track all open SSE connections so we can broadcast reload events.
   // A Set is used so cleanup on connection close is O(1).
@@ -160,13 +163,17 @@ export async function runHtml(absPath) {
     })
   })
 
-  server.listen(port, '127.0.0.1', () => {
-    const url = `http://localhost:${port}`
+  server.listen(port, listenHost, () => {
+    const localUrl = `http://localhost:${port}`
     console.log(`runn: serving   ${absPath}`)
-    console.log(`runn: →         ${url}`)
+    console.log(`runn: local  →  ${localUrl}`)
+    if (opts.host) {
+      const ip = getLocalIP()
+      if (ip) console.log(`runn: network → http://${ip}:${port}`)
+    }
     console.log(`runn: watching  ${dir}`)
     console.log()
-    openBrowser(url)
+    openBrowser(localUrl)
   })
 
   // ── File watcher ──────────────────────────────────────────────────────────

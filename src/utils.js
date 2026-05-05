@@ -10,6 +10,7 @@ import { existsSync } from 'fs'
 import { dirname, join } from 'path'
 import { fileURLToPath } from 'url'
 import { createServer } from 'net'
+import { networkInterfaces } from 'os'
 
 /**
  * Returns true if Bun is installed and callable on this machine.
@@ -92,6 +93,23 @@ export async function findFreePort(start = 3000) {
       findFreePort(start + 1).then(resolve).catch(reject)
     )
   })
+}
+
+/**
+ * Returns the first non-loopback IPv4 address on the machine — used to print
+ * the network URL when the server is bound to 0.0.0.0.
+ *
+ * Returns null if no suitable interface is found (headless CI, containers, etc.)
+ *
+ * @returns {string|null}
+ */
+export function getLocalIP() {
+  for (const ifaces of Object.values(networkInterfaces())) {
+    for (const iface of ifaces) {
+      if (iface.family === 'IPv4' && !iface.internal) return iface.address
+    }
+  }
+  return null
 }
 
 /**

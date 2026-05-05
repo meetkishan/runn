@@ -55,8 +55,9 @@ function findNuxtRoot(absPath) {
 
 /**
  * @param {string} absPath - absolute path to any file inside the Nuxt project
+ * @param {{ port?: number|null, host?: boolean }} [opts]
  */
-export async function runNuxt(absPath) {
+export async function runNuxt(absPath, opts = {}) {
   const projectRoot = findNuxtRoot(absPath)
 
   console.log(`runn: detected Nuxt project at ${projectRoot}`)
@@ -66,15 +67,12 @@ export async function runNuxt(absPath) {
   let cmd, args
 
   if (hasBun()) {
-    // `bun run dev` reads the "dev" script from package.json, which in a
-    // standard Nuxt project maps to `nuxt dev`. Respects any custom flags
-    // the user may have added (e.g. --port, --host).
+    // Pass port/host via environment variables — Nuxt reads NUXT_PORT / PORT
+    // and NUXT_HOST / HOST, so flags aren't needed here.
     cmd = 'bun'
     args = ['run', 'dev']
   } else {
     // Prefer the project-local Nuxt binary to guarantee version consistency.
-    // Fall back to npx only if Nuxt isn't installed yet — this avoids
-    // silently downloading a version that mismatches the project's package.json.
     const nuxtBin = join(projectRoot, 'node_modules/.bin/nuxt')
     if (existsSync(nuxtBin)) {
       cmd = nuxtBin
@@ -83,13 +81,23 @@ export async function runNuxt(absPath) {
       cmd = 'npx'
       args = ['--yes', 'nuxt', 'dev']
     }
+    // nuxt dev accepts --port and --host flags directly
+    if (opts.port != null) args.push('--port', String(opts.port))
+    if (opts.host)         args.push('--host', '0.0.0.0')
   }
+
+  // Set env vars so both `bun run dev` and direct binary invocations respect
+  // the requested port and host. Nuxt checks these before falling back to defaults.
+  const env = { ...process.env }
+  if (opts.port != null) { env.NUXT_PORT = String(opts.port); env.PORT = String(opts.port) }
+  if (opts.host)         { env.NUXT_HOST = '0.0.0.0';        env.HOST = '0.0.0.0' }
 
   // cwd must be the project root — Nuxt resolves pages/, components/, composables/,
   // and all auto-imports relative to the working directory
   const proc = spawn(cmd, args, {
     stdio: 'inherit',
     cwd: projectRoot,
+    env,
   })
 
   proc.on('error', (err) => {

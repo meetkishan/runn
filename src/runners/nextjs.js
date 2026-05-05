@@ -54,8 +54,9 @@ function findNextRoot(absPath) {
 
 /**
  * @param {string} absPath - absolute path to the file inside the Next.js project
+ * @param {{ port?: number|null, host?: boolean }} [opts]
  */
-export async function runNextjs(absPath) {
+export async function runNextjs(absPath, opts = {}) {
   const projectRoot = findNextRoot(absPath)
 
   console.log(`runn: detected Next.js project at ${projectRoot}`)
@@ -65,15 +66,14 @@ export async function runNextjs(absPath) {
   let cmd, args
 
   if (hasBun()) {
-    // `bun run dev` reads the "dev" script from package.json, which in a
-    // standard Next.js project maps to `next dev`. This respects any custom
-    // flags the user has added to their dev script.
+    // `bun run dev` invokes the package.json "dev" script.
+    // Pass port/host via environment variables — Next.js reads PORT and
+    // HOSTNAME automatically, so flags aren't needed here.
     cmd = 'bun'
     args = ['run', 'dev']
   } else {
     // Prefer the locally installed Next.js binary so the version matches the
-    // project's package.json. Fall back to npx only if it isn't installed —
-    // this avoids downloading a mismatched version at runtime.
+    // project's package.json. Fall back to npx only if it isn't installed.
     const nextBin = join(projectRoot, 'node_modules/.bin/next')
     if (existsSync(nextBin)) {
       cmd = nextBin
@@ -82,13 +82,23 @@ export async function runNextjs(absPath) {
       cmd = 'npx'
       args = ['--yes', 'next', 'dev']
     }
+    // next dev accepts --port and --hostname flags directly
+    if (opts.port != null) args.push('--port', String(opts.port))
+    if (opts.host)         args.push('--hostname', '0.0.0.0')
   }
+
+  // Build the environment, forwarding port/host even for `bun run dev` via
+  // the env vars that Next.js checks before its own defaults.
+  const env = { ...process.env }
+  if (opts.port != null) env.PORT     = String(opts.port)
+  if (opts.host)         env.HOSTNAME = '0.0.0.0'
 
   // cwd must be the project root — Next.js resolves pages, app dir, and config
   // relative to the working directory, not the binary location
   const proc = spawn(cmd, args, {
     stdio: 'inherit',
     cwd: projectRoot,
+    env,
   })
 
   proc.on('error', (err) => {

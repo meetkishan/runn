@@ -30,8 +30,9 @@ import { createViteOverlayPlugin } from '../overlay.js'
 
 /**
  * @param {string} absPath - absolute path to the .vue file
+ * @param {{ port?: number|null, host?: boolean }} [opts]
  */
-export async function runVue(absPath) {
+export async function runVue(absPath, opts = {}) {
   const RUNN_ROOT = getPackageRoot()
   const userFileDir = dirname(absPath)
   const userProjectRoot = findProjectRoot(absPath)
@@ -127,7 +128,9 @@ app.mount('#app')
 
     server: {
       open: true,
-      host: 'localhost',
+      // --host binds to 0.0.0.0 so other devices on the LAN can open the URL.
+      host: opts.host ? '0.0.0.0' : 'localhost',
+      ...(opts.port != null && { port: opts.port, strictPort: true }),
       hmr: {
         // Replace Vite's default error overlay with runn's custom one
         overlay: false,

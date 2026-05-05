@@ -20,15 +20,20 @@ import { runNextjs } from './runners/nextjs.js'
 import { runNuxt } from './runners/nuxt.js'
 import { runHtml } from './runners/html.js'
 
-const args = process.argv.slice(2)
+const rawArgs = process.argv.slice(2)
 
 // Show help and exit cleanly when no file is provided or help is requested
-if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
+if (rawArgs.length === 0 || rawArgs[0] === '--help' || rawArgs[0] === '-h') {
   console.log(`
   runn — run anything, zero config
 
   Usage:
-    runn <file>
+    runn <file> [options]
+
+  Options:
+    --port, -p <n>   port to listen on (default: 3000, auto-increments if busy)
+    --host           expose on 0.0.0.0 so other devices on the network can connect
+    --help, -h       show this help message
 
   Supported:
     .js  .ts        plain script   →  run with bun (or node --watch)
@@ -41,15 +46,51 @@ if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
   Examples:
     runn server.ts
     runn App.tsx
-    runn Button.vue
+    runn App.tsx --port 4000
+    runn App.tsx --host
+    runn Button.vue --port 5173 --host
     runn pages/index.tsx     (Next.js)
     runn pages/index.vue     (Nuxt)
-    runn index.html
+    runn index.html --port 8080 --host
   `)
   process.exit(0)
 }
 
-const filePath = args[0]
+// ── Parse flags ───────────────────────────────────────────────────────────────
+// Flags can appear anywhere in the argument list, before or after the filename.
+// The file is the first positional argument (not starting with '-').
+
+/** @type {{ port: number|null, host: boolean }} */
+const opts = { port: null, host: false }
+const positional = []
+
+for (let i = 0; i < rawArgs.length; i++) {
+  const arg = rawArgs[i]
+
+  if (arg === '--port' || arg === '-p') {
+    const raw = rawArgs[++i]
+    const n = parseInt(raw, 10)
+    if (!raw || !Number.isInteger(n) || n < 1 || n > 65535) {
+      console.error(`runn: invalid port value: ${raw ?? '(missing)'}`)
+      process.exit(1)
+    }
+    opts.port = n
+  } else if (arg === '--host') {
+    opts.host = true
+  } else if (!arg.startsWith('-')) {
+    positional.push(arg)
+  } else {
+    console.error(`runn: unknown flag: ${arg}`)
+    process.exit(1)
+  }
+}
+
+const filePath = positional[0]
+
+if (!filePath) {
+  console.error('runn: no file specified. Run runn --help for usage.')
+  process.exit(1)
+}
 
 // resolve() turns a relative path like './App.vue' into an absolute one.
 // All runners expect an absolute path so they can safely construct temp dirs,
@@ -73,19 +114,19 @@ const type = detectFileType(absPath, content)
 
 switch (type) {
   case 'html':
-    await runHtml(absPath)
+    await runHtml(absPath, opts)
     break
   case 'react':
-    await runReact(absPath, content)
+    await runReact(absPath, content, opts)
     break
   case 'vue':
-    await runVue(absPath)
+    await runVue(absPath, opts)
     break
   case 'nextjs':
-    await runNextjs(absPath)
+    await runNextjs(absPath, opts)
     break
   case 'nuxt':
-    await runNuxt(absPath)
+    await runNuxt(absPath, opts)
     break
   default:
     await runScript(absPath)
